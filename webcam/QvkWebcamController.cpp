@@ -74,7 +74,12 @@ QvkWebcamController::QvkWebcamController( Ui_screencast value )
   connect( webcamWatcher, SIGNAL( removedCamera( QString ) ), this, SLOT( ifCameraRemovedCloseWindow( QString ) ) );  
 
   // If all webcams complete read, then read setting for show or not show
-  connect( webcamWatcher, SIGNAL( webcamDescription( QStringList, QStringList ) ), this, SLOT( setCheckboxWebcamFromSettings() ) );
+  //connect( webcamWatcher, SIGNAL( webcamDescription( QStringList, QStringList ) ), this, SLOT( setCheckboxWebcamFromSettings() ) );
+
+  connect( myUi.webcamComboBox, SIGNAL( currentIndexChanged( int ) ), this, SLOT( resolution( int ) )  );
+
+  connect( myUi.resolutionComboBox, SIGNAL( currentIndexChanged( int ) ), this, SLOT( showNewResolutionInWebcamWindow( int ) ) );
+
 }
 
 
@@ -83,13 +88,57 @@ QvkWebcamController::~QvkWebcamController()
 }
 
 
-void QvkWebcamController::setCheckboxWebcamFromSettings()
+void QvkWebcamController::resolution( int index )
 {
-  if ( Qt::CheckState( vkSettings.getWebcamOnOff() ) == Qt::Checked )
+    (void)index;
+    myUi.webcamCheckBox->setEnabled( false );
+    QCoreApplication::processEvents( QEventLoop::AllEvents );
+    myUi.webcamComboBox->setEnabled( false );
+    QCoreApplication::processEvents( QEventLoop::AllEvents );
+    myUi.resolutionComboBox->setEnabled( false );
+    QCoreApplication::processEvents( QEventLoop::AllEvents );
+    camera = new QCamera( myUi.webcamComboBox->currentData().toByteArray() );
+    connect( camera, SIGNAL( statusChanged( QCamera::Status ) ), this, SLOT( myStatusChanged( QCamera::Status ) ) );
+    connect( camera, SIGNAL( stateChanged( QCamera::State   ) ), this, SLOT( myStateChanged( QCamera::State ) )  );
+    camera->load();
+    myUi.resolutionComboBox->setEnabled( true );
+    myUi.webcamComboBox->setEnabled( true );
+    myUi.webcamCheckBox->setEnabled( true );
+#ifdef Q_OS_WIN
+    camera->unload();
+    delete camera;
+#endif
+}
+
+
+void QvkWebcamController::showNewResolutionInWebcamWindow( int index )
+{
+    (void)index;
+  if ( myUi.webcamCheckBox->checkState() == Qt::Checked )
   {
-    myUi.webcamCheckBox->click();
+    myUi.resolutionComboBox->setEnabled( false );
+      QCoreApplication::processEvents( QEventLoop::AllEvents );
+      myUi.webcamCheckBox->click();
+      myUi.webcamCheckBox->click();
+    myUi.resolutionComboBox->setEnabled( true );
   }
 }
+
+
+
+/*
+void QvkWebcamController::setCheckboxWebcamFromSettings()
+{
+  while ( ( myUi.webcamComboBox->count() < 1 ) or ( myUi.resolutionComboBox->count() < 1 ) )
+  {
+  }
+
+  if ( Qt::CheckState( vkSettings.getWebcamOnOff() ) == Qt::Checked )
+  {
+      myUi.webcamCheckBox->click();
+  }
+}
+*/
 
 #ifndef Q_OS_WIN
 void QvkWebcamController::overFullScreenWebcamCheckBox_OnOff()
@@ -100,6 +149,7 @@ void QvkWebcamController::overFullScreenWebcamCheckBox_OnOff()
   myUi.webcamCheckBox->click();
 }
 #endif
+
 
 void QvkWebcamController::webcamOnOff( int value )
 {
@@ -115,7 +165,27 @@ void QvkWebcamController::webcamOnOff( int value )
     setActiveCamera( myUi.webcamComboBox->currentData().toString() );
 
     QByteArray device = myUi.webcamComboBox->currentData().toByteArray();
-    displayWebcam( device );
+    camera = new QCamera( device );
+    camera->setCaptureMode( QCamera::CaptureViewfinder );
+
+    connect( camera, SIGNAL( statusChanged( QCamera::Status ) ), this, SLOT( myStatusChanged( QCamera::Status ) ) );
+    connect( camera, SIGNAL( stateChanged( QCamera::State   ) ), this, SLOT( myStateChanged( QCamera::State ) )  );
+
+    QStringList list = myUi.resolutionComboBox->currentText().split( "x" );
+    QString w = list.at(0);
+    QString h = list.at(1);
+    QCameraViewfinderSettings viewfinderSettings;
+    viewfinderSettings.setResolution( w.toInt(), h.toInt() );
+    viewfinderSettings.setMinimumFrameRate( 0.0 );
+    viewfinderSettings.setMaximumFrameRate( 0.0 );
+    camera->setViewfinderSettings( viewfinderSettings );
+
+    camera->setViewfinder( videoSurface );
+
+    webcamWindow->show();
+
+    camera->start();
+    //displayWebcam( device );
   }
 
   if ( value == Qt::Unchecked )
@@ -255,18 +325,21 @@ void QvkWebcamController::addToComboBox( QStringList description, QStringList de
 
 }
 
-
+/*
 // http://doc.qt.io/qt-5/qmultimedia.html#AvailabilityStatus-enum
 void QvkWebcamController::displayWebcam( QByteArray device )
 {
     camera = new QCamera( device );
-    //camera->setCaptureMode( QCamera::CaptureViewfinder );
+    camera->setCaptureMode( QCamera::CaptureViewfinder );
 
     connect( camera, SIGNAL( statusChanged( QCamera::Status ) ), this, SLOT( myStatusChanged( QCamera::Status ) ) );
     connect( camera, SIGNAL( stateChanged( QCamera::State   ) ), this, SLOT( myStateChanged( QCamera::State ) )  );
 
+    QStringList list = myUi.resolutionComboBox->currentText().split( "x" );
+    QString w = list.at(0);
+    QString h = list.at(1);
     QCameraViewfinderSettings viewfinderSettings;
-    viewfinderSettings.setResolution( 640, 480 );
+    viewfinderSettings.setResolution( w.toInt(), h.toInt() );
     viewfinderSettings.setMinimumFrameRate( 0.0 );
     viewfinderSettings.setMaximumFrameRate( 0.0 );
     camera->setViewfinderSettings( viewfinderSettings );
@@ -277,10 +350,12 @@ void QvkWebcamController::displayWebcam( QByteArray device )
 
     camera->start();
 }
-
+*/
 
 void QvkWebcamController::myStatusChanged( QCamera::Status status )
 {
+  if( myUi.webcamCheckBox->isChecked() == true )
+  {
     switch ( status )
     {
       case QCamera::UnavailableStatus : { qDebug() << "[vokoscreen]" << status; break; }// 0
@@ -293,23 +368,6 @@ void QvkWebcamController::myStatusChanged( QCamera::Status status )
       case QCamera::LoadedStatus      : { qDebug() << "[vokoscreen]" << status;
                                           msgInWebcamWindow->setMsg( tr( "Camera is loaded" ) );
                                           qDebug() << "";
-
-                                          QCameraViewfinderSettings settings;
-                                          QList<QSize> resolution = camera->supportedViewfinderResolutions( settings );
-                                          qDebug() << "[vokoscreen] camera resolutions" << resolution;
-                                          qDebug() << "";
-
-                                          QList<QVideoFrame::PixelFormat> pixelFormat = camera->supportedViewfinderPixelFormats( settings );
-                                          qDebug() << "[vokoscreen] camera pixelformats" << pixelFormat;
-                                          qDebug() << "";
-
-                                          QList<QCamera::FrameRateRange> frameRateRange = camera->supportedViewfinderFrameRateRanges( settings );
-                                          for ( int i = 0; i < frameRateRange.count(); i++ )
-                                          {
-                                              qDebug() << "[vokoscreen] camera frameRateRange" << frameRateRange[i].minimumFrameRate << frameRateRange[i].maximumFrameRate;
-                                          }
-                                          qDebug() << "";
-
                                           break;
                                         }// 4
       case QCamera::StandbyStatus     : { qDebug() << "[vokoscreen]" << status; break; }// 5
@@ -322,6 +380,51 @@ void QvkWebcamController::myStatusChanged( QCamera::Status status )
                                           emit webcamBusy();
                                           break; }// 8
     }
+  }
+
+  if( ( myUi.webcamCheckBox->isChecked() == false ) and ( status == QCamera::LoadedStatus ) )
+  {
+      qDebug() << "[vokoscreen] ---Begin search camera parameters and checkbox is disabled---";
+      QCameraViewfinderSettings settings;
+      QList<QSize> resolution = camera->supportedViewfinderResolutions( settings );
+      qDebug() << "[vokoscreen] camera resolutions" << resolution;
+
+      // Begin load camera resolutions in combobox
+      myUi.resolutionComboBox->clear();
+      QStringList stringlist;
+      for( int i = 0; i < resolution.count(); i++ )
+      {
+          int w = resolution[i].width();
+          int h = resolution[i].height();
+          QString wh = QString::number( w  ) + "x" + QString::number( h );
+          stringlist.append( wh );
+      }
+      myUi.resolutionComboBox->addItems(stringlist);
+
+      int index = myUi.resolutionComboBox->findText( "640x480" );
+      if ( index == -1 )
+         myUi.resolutionComboBox->setCurrentIndex( 0 );
+      else
+          myUi.resolutionComboBox->setCurrentIndex( index );
+      // End load
+
+      qDebug() << "[vokoscreen] ---End search camera parameters and checkbox is disabled---";
+      qDebug();
+
+/*
+      QList<QVideoFrame::PixelFormat> pixelFormat = camera->supportedViewfinderPixelFormats( settings );
+      qDebug() << "[vokoscreen] camera pixelformats" << pixelFormat;
+      qDebug() << "";
+
+      QList<QCamera::FrameRateRange> frameRateRange = camera->supportedViewfinderFrameRateRanges( settings );
+      for ( int i = 0; i < frameRateRange.count(); i++ )
+      {
+          qDebug() << "[vokoscreen] camera frameRateRange" << frameRateRange[i].minimumFrameRate << frameRateRange[i].maximumFrameRate;
+      }
+      qDebug() << "";
+*/
+  }
+
 }
 
 

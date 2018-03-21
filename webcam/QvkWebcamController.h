@@ -21,7 +21,7 @@ public:
 
   
 public slots:
-   void displayWebcam( QByteArray device );
+   //void displayWebcam( QByteArray device );
 
 
 private slots:
@@ -35,10 +35,12 @@ private slots:
   void setNewImage( QImage image );
   void setMirrorOnOff( bool value );
   void rotateDialclicked();
-  void setCheckboxWebcamFromSettings();
+  //void setCheckboxWebcamFromSettings();
 #ifndef Q_OS_WIN
   void overFullScreenWebcamCheckBox_OnOff();
 #endif
+  void resolution(int index );
+  void showNewResolutionInWebcamWindow( int index );
 
 private:
   QCamera *camera;
